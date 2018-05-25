@@ -21,6 +21,27 @@ let s:kind_text_mappings = {
             \ '18': 'reference',
             \ }
 
+let s:kind_type_mappings = {
+            \ '1': '-',
+            \ '2': 'f',
+            \ '3': 'f',
+            \ '4': 'f',
+            \ '5': 'm',
+            \ '6': 'v',
+            \ '7': 't',
+            \ '8': 't',
+            \ '9': 't',
+            \ '10': 'm',
+            \ '11': '-',
+            \ '12': 'c',
+            \ '13': 'c',
+            \ '14': 'k',
+            \ '15': '-',
+            \ '16': '-',
+            \ '17': 'F',
+            \ '18': 'r',
+            \ }
+
 let s:completion_status_success = 'success'
 let s:completion_status_failed = 'failed'
 let s:completion_status_pending = 'pending'
@@ -88,6 +109,10 @@ function! lsp#omni#get_kind_text(completion_item) abort
     return has_key(a:completion_item, 'kind') && has_key(s:kind_text_mappings, a:completion_item['kind']) ? s:kind_text_mappings[a:completion_item['kind']] : ''
 endfunction
 
+function! lsp#omni#get_kind_type(completion_item) abort
+    return has_key(a:completion_item, 'kind') && has_key(s:kind_type_mappings, a:completion_item['kind']) ? s:kind_type_mappings[a:completion_item['kind']] : ''
+endfunction
+
 " auxiliary functions {{{
 
 function! s:find_complete_servers_and_start_pos() abort
@@ -142,26 +167,66 @@ function! s:get_completion_result(data) abort
     return {'matches': l:matches, 'incomplete': l:incomplete}
 endfunction
 
+function! lsp#omni#crack_snippet(text)
+  let l:idx = stridx(a:text, '${')
+  if l:idx >= 1
+    return [a:text[0 : l:idx - 1], 'snippet:'.a:text]
+  endif
+  return [a:text, '']
+endfunction
+
+function! lsp#omni#get_abbr_for_snippet(text, item)
+  if !has_key(a:item, 'insertTextFormat') || a:item['insertTextFormat'] != 2
+    return [a:text,  a:item['label'], '']
+  endif
+
+  let [l:plain, l:snippet] = lsp#omni#crack_snippet(a:text)
+  return [l:plain, a:item['label'], l:snippet]
+endfunction
+
 function! lsp#omni#get_vim_completion_item(item) abort
-    if has_key(a:item, 'insertText') && !empty(a:item['insertText'])
-        if has_key(a:item, 'insertTextFormat') && a:item['insertTextFormat'] != 1
-            let l:word = a:item['label']
-        else
-            let l:word = a:item['insertText']
-        endif
-        let l:abbr = a:item['label']
+    if has_key(a:item, 'textEdit') && has_key(a:item['textEdit'], 'newText')
+        let [l:word, l:abbr, l:snippet] = lsp#omni#get_abbr_for_snippet(a:item['textEdit']['newText'], a:item)
+    elseif has_key(a:item, 'insertText') && !empty(a:item['insertText'])
+        let [l:word, l:abbr, l:snippet] = lsp#omni#get_abbr_for_snippet(a:item['insertText'], a:item)
     else
         let l:word = a:item['label']
         let l:abbr = a:item['label']
+        let l:snippet = ''
     endif
-    let l:menu = lsp#omni#get_kind_text(a:item)
-    let l:completion = { 'word': l:word, 'abbr': l:abbr, 'menu': l:menu, 'icase': 1, 'dup': 1 }
+    if has_key(a:item, 'detail')
+      let l:menu = a:item['detail']
+    else
+      let l:menu = lsp#omni#get_kind_text(a:item)
+    endif
+    let l:kind = lsp#omni#get_kind_type(a:item)
+    let l:completion = {
+          \  'word': l:word,
+          \  'abbr': l:abbr,
+          \  'menu': l:menu,
+          \  'icase': 1,
+          \  'dup': 1,
+          \  'kind': l:kind,
+          \  'user_data': l:snippet }
     if has_key(a:item, 'documentation')
         if type(a:item['documentation']) == type('')
             let l:completion['info'] = a:item['documentation']
         endif
     endif
     return l:completion
+endfunction
+
+function! lsp#omni#handle_post_completion_ultisnips()
+  if !has_key(v:completed_item, 'user_data')
+    return
+  endif
+  let l:snippet = v:completed_item['user_data']
+  if l:snippet == '' || stridx(l:snippet, 'snippet:') != 0
+    return
+  endif
+  let l:snippet = l:snippet[8:]
+  let [l:plain, l:s] = lsp#omni#crack_snippet(l:snippet)
+  call UltiSnips#Anon(l:snippet, l:plain, '', 'i')
 endfunction
 
 " }}}

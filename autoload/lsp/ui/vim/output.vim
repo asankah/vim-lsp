@@ -11,6 +11,7 @@ function! lsp#ui#vim#output#preview(data) abort
     0delete
 
     setlocal readonly nomodifiable
+    setlocal buftype=nofile
 
     let &l:filetype = l:ft . '.lsp-hover'
 
@@ -34,7 +35,7 @@ function! s:append(data) abort
 
         return 'markdown'
     elseif type(a:data) == type({}) && has_key(a:data, 'language')
-        put ='```'.a:data.language
+        put ='``` '.a:data.language
         put =a:data.value
         put ='```'
 

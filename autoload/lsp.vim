@@ -317,7 +317,17 @@ function! s:ensure_init(buf, server_name, cb) abort
     if has_key(l:server_info, 'capabilities')
         let l:capabilities = l:server_info['capabilities']
     else
-        let l:capabilities = {}
+        let l:capabilities = {
+              \ 'textDocument': {
+              \   'completion': {
+              \     'completionItem': {
+              \       'snippetSupport': v:true,
+              \       'documentationFormat': 'markdown'
+              \   }},
+              \   'hover': {
+              \     'contentFormat': 'markdown'
+              \   },
+              \ }}
     endif
 
     if has_key(l:server_info, 'initialization_options')
