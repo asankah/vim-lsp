@@ -170,7 +170,7 @@ endfunction
 function! lsp#omni#crack_snippet(text)
   let l:idx = stridx(a:text, '${')
   if l:idx >= 1
-    return [a:text[0 : l:idx - 1], 'snippet:'.a:text]
+    return [a:text[0 : l:idx - 1], a:text]
   endif
   return [a:text, '']
 endfunction
@@ -181,7 +181,9 @@ function! lsp#omni#get_abbr_for_snippet(text, item)
   endif
 
   let [l:plain, l:snippet] = lsp#omni#crack_snippet(a:text)
-  return [l:plain, a:item['label'], l:snippet]
+  return [l:plain,
+        \ a:item['label'],
+        \ json_encode({'snippet': l:snippet, 'snippet_trigger': l:plain})]
 endfunction
 
 function! lsp#omni#get_vim_completion_item(item) abort
@@ -216,17 +218,23 @@ function! lsp#omni#get_vim_completion_item(item) abort
     return l:completion
 endfunction
 
-function! lsp#omni#handle_post_completion_ultisnips()
-  if !has_key(v:completed_item, 'user_data')
+function! lsp#omni#complete_done()
+  if exists('g:loaded_neosnippet')
+    call neosnippet#complete_done()
     return
   endif
-  let l:snippet = v:completed_item['user_data']
-  if l:snippet == '' || stridx(l:snippet, 'snippet:') != 0
-    return
+
+  if exists('did_plugin_ultisnips')
+    if !has_key(v:completed_item, 'user_data')
+      return
+    endif
+    let l:snip = json_decode(v:completed_item['user_data'])
+    if !has_key(l:snip, 'snippet') || !has_key(l:snip, 'snippet_trigger')
+      return
+    endif
+
+    call UltiSnips#Anon(l:snip['snippet'], l:snip['snippet_trigger'], '', 'i')
   endif
-  let l:snippet = l:snippet[8:]
-  let [l:plain, l:s] = lsp#omni#crack_snippet(l:snippet)
-  call UltiSnips#Anon(l:snippet, l:plain, '', 'i')
 endfunction
 
 " }}}
